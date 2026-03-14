@@ -1,15 +1,26 @@
 import { Router, type IRouter } from "express";
-import { db, studentsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
-import crypto from "crypto";
+import { db } from "@workspace/db";
+import { sql, eq } from "drizzle-orm";
+import { pgTable, varchar, text, integer, timestamp } from "drizzle-orm/pg-core";
 
 const router: IRouter = Router();
 
-function hashPassword(password: string): string {
-  return crypto.createHash("sha256").update(password).digest("hex");
-}
+// ใช้ตาราง users ที่มีอยู่แล้วใน Neon
+const usersTable = pgTable("users", {
+  id: varchar("id").primaryKey(),
+  studentId: text("student_id").notNull(),
+  name: text("name"),
+  password: text("password").notNull(),
+  schoolCode: text("school_code"),
+  role: text("role"),
+  merits: integer("merits"),
+  trashPoints: integer("trash_points"),
+  stamps: integer("stamps"),
+  discordUserId: varchar("discord_user_id", { length: 50 }).unique(),
+  verifiedAt: timestamp("verified_at"),
+});
 
-// Register a new student (called from your website)
+// Register a new student (called from /addstudent command)
 router.post("/register", async (req, res) => {
   const { student_id, password } = req.body;
 
@@ -21,8 +32,8 @@ router.post("/register", async (req, res) => {
   try {
     const existing = await db
       .select()
-      .from(studentsTable)
-      .where(eq(studentsTable.studentId, String(student_id)))
+      .from(usersTable)
+      .where(eq(usersTable.studentId, String(student_id)))
       .limit(1);
 
     if (existing.length > 0) {
@@ -30,9 +41,11 @@ router.post("/register", async (req, res) => {
       return;
     }
 
-    await db.insert(studentsTable).values({
+    const newId = crypto.randomUUID();
+    await db.insert(usersTable).values({
+      id: newId,
       studentId: String(student_id),
-      passwordHash: hashPassword(String(password)),
+      password: String(password),
     });
 
     res.json({ success: true, message: "Student registered successfully" });
@@ -41,7 +54,7 @@ router.post("/register", async (req, res) => {
   }
 });
 
-// Verify student credentials (used by Discord bot internally)
+// Verify student credentials (used by Discord bot)
 router.post("/verify", async (req, res) => {
   const { student_id, password, discord_user_id } = req.body;
 
@@ -53,8 +66,8 @@ router.post("/verify", async (req, res) => {
   try {
     const students = await db
       .select()
-      .from(studentsTable)
-      .where(eq(studentsTable.studentId, String(student_id)))
+      .from(usersTable)
+      .where(eq(usersTable.studentId, String(student_id)))
       .limit(1);
 
     if (students.length === 0) {
@@ -64,7 +77,7 @@ router.post("/verify", async (req, res) => {
 
     const student = students[0];
 
-    if (student.passwordHash !== hashPassword(String(password))) {
+    if (student.password !== String(password)) {
       res.status(401).json({ success: false, error: "รหัสผ่านไม่ถูกต้อง" });
       return;
     }
@@ -76,12 +89,12 @@ router.post("/verify", async (req, res) => {
 
     // Link Discord account
     await db
-      .update(studentsTable)
+      .update(usersTable)
       .set({
         discordUserId: String(discord_user_id),
         verifiedAt: new Date(),
       })
-      .where(eq(studentsTable.studentId, String(student_id)));
+      .where(eq(usersTable.studentId, String(student_id)));
 
     res.json({ success: true });
   } catch (err: any) {
@@ -94,13 +107,14 @@ router.get("/", async (_req, res) => {
   try {
     const students = await db
       .select({
-        id: studentsTable.id,
-        studentId: studentsTable.studentId,
-        discordUserId: studentsTable.discordUserId,
-        verifiedAt: studentsTable.verifiedAt,
-        createdAt: studentsTable.createdAt,
+        id: usersTable.id,
+        studentId: usersTable.studentId,
+        name: usersTable.name,
+        role: usersTable.role,
+        discordUserId: usersTable.discordUserId,
+        verifiedAt: usersTable.verifiedAt,
       })
-      .from(studentsTable);
+      .from(usersTable);
 
     res.json(students);
   } catch (err: any) {
@@ -112,8 +126,8 @@ router.get("/", async (_req, res) => {
 router.delete("/:studentId", async (req, res) => {
   try {
     await db
-      .delete(studentsTable)
-      .where(eq(studentsTable.studentId, req.params.studentId));
+      .delete(usersTable)
+      .where(eq(usersTable.studentId, req.params.studentId));
 
     res.json({ success: true });
   } catch (err: any) {
