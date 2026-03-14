@@ -6,8 +6,6 @@ import {
   ButtonStyle,
   EmbedBuilder,
   Events,
-  REST,
-  Routes,
 } from "discord.js";
 
 const TOKEN = process.env.DISCORD_TOKEN;
@@ -26,8 +24,6 @@ if (!TOKEN || !GUILD_ID || !ROLE_ID || !CHANNEL_ID) {
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.GuildMessages,
   ],
 });
 
@@ -80,8 +76,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
   await interaction.deferReply({ ephemeral: true });
 
   try {
-    const guild = await client.guilds.fetch(GUILD_ID);
-    const member = await guild.members.fetch(interaction.user.id);
+    const member = interaction.member;
 
     if (member.roles.cache.has(ROLE_ID)) {
       await interaction.editReply({

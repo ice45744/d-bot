@@ -4,6 +4,15 @@
 
 pnpm workspace monorepo using TypeScript. Each package manages its own dependencies.
 
+## Discord Bot
+
+บอทยืนยันสมาชิกสภานักเรียน อยู่ที่ `artifacts/discord-bot/`
+
+- **ฟีเจอร์**: ส่งข้อความพร้อมปุ่ม "✅ ยืนยันสมาชิก" ไปยังช่องที่กำหนด
+- **การทำงาน**: กดปุ่ม → ได้รับยศสมาชิกทันที (ephemeral reply)
+- **ตัวแปรสภาพแวดล้อม**: `DISCORD_TOKEN` (secret), `DISCORD_GUILD_ID`, `DISCORD_ROLE_ID`, `DISCORD_CHANNEL_ID`
+- **Workflow**: "Discord Bot" — `pnpm --filter @workspace/discord-bot start`
+
 ## Stack
 
 - **Monorepo tool**: pnpm workspaces
