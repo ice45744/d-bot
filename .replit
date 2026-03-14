@@ -1,4 +1,4 @@
-modules = ["nodejs-24"]
+modules = ["nodejs-24", "postgresql-16"]
 
 [[artifacts]]
 id = "artifacts/api-server"
@@ -52,3 +52,6 @@ timeoutMs = 20000
 DISCORD_GUILD_ID = "1466822255005798484"
 DISCORD_ROLE_ID = "1477691134301175959"
 DISCORD_CHANNEL_ID = "1477681029081731072"
+
+[nix]
+channel = "stable-25_05"

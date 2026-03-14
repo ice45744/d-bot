@@ -9,12 +9,16 @@ import {
   REST,
   Routes,
   SlashCommandBuilder,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
 } from "discord.js";
 
 const TOKEN = process.env.DISCORD_TOKEN;
 const GUILD_ID = process.env.DISCORD_GUILD_ID;
 const ROLE_ID = process.env.DISCORD_ROLE_ID;
 const CHANNEL_ID = process.env.DISCORD_CHANNEL_ID;
+const API_URL = process.env.API_URL || "http://localhost:8080";
 
 if (!TOKEN || !GUILD_ID || !ROLE_ID || !CHANNEL_ID) {
   console.error("Missing required environment variables!");
@@ -26,14 +30,18 @@ const client = new Client({
 });
 
 const VERIFY_BUTTON_ID = "verify_member";
+const VERIFY_MODAL_ID = "verify_modal";
+const STUDENT_ID_INPUT = "student_id_input";
+const PASSWORD_INPUT = "password_input";
 
 function buildVerifyEmbed() {
   return new EmbedBuilder()
     .setColor(0x5865f2)
     .setTitle("🏫 ยืนยันสมาชิก | สภานักเรียน")
     .setDescription(
-      "กดปุ่ม **ยืนยัน** ด้านล่างเพื่อรับยศสมาชิกของเซิร์ฟเวอร์\n\n" +
-        "หลังจากกดปุ่มแล้ว คุณจะได้รับยศโดยอัตโนมัติทันที ✅"
+      "กดปุ่ม **ยืนยัน** ด้านล่างเพื่อเข้าสู่ระบบด้วยรหัสนักเรียนของคุณ\n\n" +
+        "✅ หากมีบัญชีในระบบสภานักเรียนแล้ว จะได้รับยศทันที\n" +
+        "❌ หากยังไม่ได้สมัครสมาชิก กรุณาสมัครในเว็บไซต์สภานักเรียนก่อน"
     )
     .setFooter({ text: "สภานักเรียน | ระบบยืนยันสมาชิก" })
     .setTimestamp();
@@ -43,9 +51,40 @@ function buildVerifyRow() {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(VERIFY_BUTTON_ID)
-      .setLabel("✅ ยืนยันสมาชิก")
+      .setLabel("✅ ยืนยันตัวตน")
       .setStyle(ButtonStyle.Success)
   );
+}
+
+function buildVerifyModal() {
+  const modal = new ModalBuilder()
+    .setCustomId(VERIFY_MODAL_ID)
+    .setTitle("เข้าสู่ระบบ สภานักเรียน");
+
+  const studentIdInput = new TextInputBuilder()
+    .setCustomId(STUDENT_ID_INPUT)
+    .setLabel("รหัสประจำตัวนักเรียน")
+    .setStyle(TextInputStyle.Short)
+    .setPlaceholder("เช่น 12345")
+    .setRequired(true)
+    .setMinLength(1)
+    .setMaxLength(20);
+
+  const passwordInput = new TextInputBuilder()
+    .setCustomId(PASSWORD_INPUT)
+    .setLabel("รหัสผ่าน")
+    .setStyle(TextInputStyle.Short)
+    .setPlaceholder("รหัสผ่านของคุณ")
+    .setRequired(true)
+    .setMinLength(1)
+    .setMaxLength(100);
+
+  modal.addComponents(
+    new ActionRowBuilder().addComponents(studentIdInput),
+    new ActionRowBuilder().addComponents(passwordInput)
+  );
+
+  return modal;
 }
 
 async function registerCommands() {
@@ -53,6 +92,16 @@ async function registerCommands() {
     new SlashCommandBuilder()
       .setName("setup")
       .setDescription("ส่งข้อความยืนยันสมาชิกไปยังช่องที่กำหนด (แอดมินเท่านั้น)")
+      .toJSON(),
+    new SlashCommandBuilder()
+      .setName("addstudent")
+      .setDescription("เพิ่มนักเรียนในระบบ (แอดมินเท่านั้น)")
+      .addStringOption((opt) =>
+        opt.setName("student_id").setDescription("รหัสนักเรียน").setRequired(true)
+      )
+      .addStringOption((opt) =>
+        opt.setName("password").setDescription("รหัสผ่าน").setRequired(true)
+      )
       .toJSON(),
   ];
 
@@ -99,8 +148,9 @@ client.once(Events.ClientReady, async (readyClient) => {
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
+  // /setup command
   if (interaction.isChatInputCommand() && interaction.commandName === "setup") {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: 64 });
     try {
       const channel = await client.channels.fetch(CHANNEL_ID);
       await sendVerifyMessage(channel);
@@ -108,40 +158,87 @@ client.on(Events.InteractionCreate, async (interaction) => {
         content: `✅ ส่งข้อความยืนยันไปยัง <#${CHANNEL_ID}> เรียบร้อยแล้ว!`,
       });
     } catch (err) {
-      await interaction.editReply({
-        content: "❌ เกิดข้อผิดพลาด: " + err.message,
-      });
+      await interaction.editReply({ content: "❌ เกิดข้อผิดพลาด: " + err.message });
     }
     return;
   }
 
-  if (!interaction.isButton()) return;
-  if (interaction.customId !== VERIFY_BUTTON_ID) return;
+  // /addstudent command
+  if (interaction.isChatInputCommand() && interaction.commandName === "addstudent") {
+    await interaction.deferReply({ flags: 64 });
+    const studentId = interaction.options.getString("student_id");
+    const password = interaction.options.getString("password");
 
-  await interaction.deferReply({ ephemeral: true });
-
-  try {
-    const member = interaction.member;
-
-    if (member.roles.cache.has(ROLE_ID)) {
-      await interaction.editReply({
-        content: "✅ คุณได้รับยศสมาชิกไปแล้ว!",
+    try {
+      const res = await fetch(`${API_URL}/api/students/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ student_id: studentId, password }),
       });
-      return;
+      const data = await res.json();
+
+      if (!res.ok) {
+        await interaction.editReply({ content: `❌ ${data.error}` });
+      } else {
+        await interaction.editReply({
+          content: `✅ เพิ่มนักเรียนรหัส **${studentId}** เรียบร้อยแล้ว!`,
+        });
+      }
+    } catch (err) {
+      await interaction.editReply({ content: "❌ เกิดข้อผิดพลาด: " + err.message });
     }
+    return;
+  }
 
-    await member.roles.add(ROLE_ID);
+  // Verify button → show modal
+  if (interaction.isButton() && interaction.customId === VERIFY_BUTTON_ID) {
+    await interaction.showModal(buildVerifyModal());
+    return;
+  }
 
-    await interaction.editReply({
-      content: "🎉 ยืนยันสำเร็จ! คุณได้รับยศสมาชิกของสภานักเรียนแล้ว ยินดีต้อนรับ!",
-    });
+  // Modal submitted
+  if (interaction.isModalSubmit() && interaction.customId === VERIFY_MODAL_ID) {
+    await interaction.deferReply({ flags: 64 });
 
-    console.log(`ให้ยศสมาชิกกับ ${interaction.user.tag} (${interaction.user.id}) แล้ว`);
-  } catch (error) {
-    console.error("เกิดข้อผิดพลาดในการให้ยศ:", error);
-    await interaction.editReply({
-      content: "❌ เกิดข้อผิดพลาด กรุณาติดต่อผู้ดูแลระบบ\n`" + error.message + "`",
-    });
+    const studentId = interaction.fields.getTextInputValue(STUDENT_ID_INPUT);
+    const password = interaction.fields.getTextInputValue(PASSWORD_INPUT);
+    const discordUserId = interaction.user.id;
+
+    try {
+      const res = await fetch(`${API_URL}/api/students/verify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          student_id: studentId,
+          password,
+          discord_user_id: discordUserId,
+        }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        await interaction.editReply({ content: `❌ ${data.error}` });
+        return;
+      }
+
+      // Assign role
+      const member = interaction.member;
+      if (member.roles.cache.has(ROLE_ID)) {
+        await interaction.editReply({ content: "✅ คุณได้รับยศสมาชิกไปแล้ว!" });
+        return;
+      }
+
+      await member.roles.add(ROLE_ID);
+      await interaction.editReply({
+        content: `🎉 ยืนยันสำเร็จ! ยินดีต้อนรับสู่เซิร์ฟเวอร์สภานักเรียน คุณได้รับยศสมาชิกแล้ว!`,
+      });
+
+      console.log(`ให้ยศสมาชิกกับ ${interaction.user.tag} (รหัส ${studentId}) แล้ว`);
+    } catch (err) {
+      console.error("เกิดข้อผิดพลาด:", err);
+      await interaction.editReply({ content: "❌ เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง" });
+    }
+    return;
   }
 });
 
