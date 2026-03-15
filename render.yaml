@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: discord-bot
+    runtime: node
+    region: singapore
+    plan: free
+    buildCommand: npm install -g pnpm@10 && pnpm install --filter @workspace/discord-bot...
+    startCommand: pnpm --filter @workspace/discord-bot start
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: DISCORD_TOKEN
+        sync: false
+      - key: DISCORD_GUILD_ID
+        sync: false
+      - key: DISCORD_ROLE_ID
+        sync: false
+      - key: DISCORD_CHANNEL_ID
+        sync: false
