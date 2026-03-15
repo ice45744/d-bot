@@ -1,0 +1,14 @@
+# fly.toml สำหรับ Discord Bot
+app = "your-bot-app-name"
+primary_region = "sin"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+
+[[vm]]
+  memory = "256mb"
+  cpu_kind = "shared"
+  cpus = 1
