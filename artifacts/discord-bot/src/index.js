@@ -1,4 +1,4 @@
-import http from "http";
+import express from "express";
 import {
   Client,
   GatewayIntentBits,
@@ -273,12 +273,49 @@ client.on(Events.InteractionCreate, async (interaction) => {
   }
 });
 
+const app = express();
 const PORT = process.env.PORT || 3000;
-http.createServer((req, res) => {
-  res.writeHead(200);
-  res.end("Bot is running!");
-}).listen(PORT, () => {
-  console.log(`Health check server running on port ${PORT}`);
+
+const startTime = new Date();
+
+app.get("/", (req, res) => {
+  const uptime = Math.floor((Date.now() - startTime) / 1000);
+  const hours = Math.floor(uptime / 3600);
+  const minutes = Math.floor((uptime % 3600) / 60);
+  const seconds = uptime % 60;
+
+  res.send(`
+    <!DOCTYPE html>
+    <html lang="th">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>สภานักเรียน — Bot Dashboard</title>
+      <style>
+        body { font-family: sans-serif; background: #1a1a2e; color: #eee; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+        .card { background: #16213e; border-radius: 16px; padding: 40px; text-align: center; max-width: 400px; width: 90%; box-shadow: 0 4px 30px rgba(0,0,0,0.4); }
+        .status { font-size: 48px; margin-bottom: 16px; }
+        h1 { color: #2ecc71; margin: 0 0 8px; font-size: 24px; }
+        p { color: #aaa; margin: 4px 0; }
+        .badge { display: inline-block; background: #2ecc71; color: #000; border-radius: 20px; padding: 4px 16px; font-weight: bold; margin-top: 16px; }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <div class="status">🤖</div>
+        <h1>สภานักเรียน Bot</h1>
+        <p>สถานะ: <strong style="color:#2ecc71">Online</strong></p>
+        <p>Uptime: <strong>${hours}h ${minutes}m ${seconds}s</strong></p>
+        <p>เวลาเริ่มต้น: <strong>${startTime.toLocaleString("th-TH")}</strong></p>
+        <div class="badge">✅ Bot กำลังทำงาน</div>
+      </div>
+    </body>
+    </html>
+  `);
+});
+
+app.listen(PORT, () => {
+  console.log(`Dashboard พร้อมใช้งานที่ port ${PORT}`);
 });
 
 client.login(TOKEN);
