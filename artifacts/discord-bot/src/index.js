@@ -1,3 +1,4 @@
+import http from "http";
 import {
   Client,
   GatewayIntentBits,
@@ -270,6 +271,14 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
     return;
   }
+});
+
+const PORT = process.env.PORT || 3000;
+http.createServer((req, res) => {
+  res.writeHead(200);
+  res.end("Bot is running!");
+}).listen(PORT, () => {
+  console.log(`Health check server running on port ${PORT}`);
 });
 
 client.login(TOKEN);
