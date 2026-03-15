@@ -318,4 +318,14 @@ app.listen(PORT, () => {
   console.log(`Dashboard พร้อมใช้งานที่ port ${PORT}`);
 });
 
+const SELF_URL = process.env.APP_URL || `https://${process.env.REPLIT_DOMAINS}`;
+setInterval(async () => {
+  try {
+    await fetch(SELF_URL);
+    console.log(`[Keep-Alive] ping ${SELF_URL} สำเร็จ`);
+  } catch (err) {
+    console.warn(`[Keep-Alive] ping ล้มเหลว: ${err.message}`);
+  }
+}, 14 * 60 * 1000);
+
 client.login(TOKEN);
